@@ -63,11 +63,20 @@ async function cardToPng(card, title, muscles, logo) {
   x.textBaseline = "alphabetic";
 
   const half = (W - 2 * M) / 2 - 20;             // título e logo têm no máximo 50% cada
-  x.fillStyle = "#ffffff"; x.font = `700 84px ${SANS}`;
-  const tl = wrapText(x, title || "Exercício", half);
-  let y = M + 72;
-  tl.forEach((l, i) => x.fillText(l, M, y + i * 94));
-  y += (tl.length - 1) * 94 + 66;
+  // diminui a fonte do título até a palavra mais longa caber na metade e ter no máximo 3 linhas
+  const text = title || "Exercício";
+  let size = 84, tl;
+  for (; size >= 44; size -= 4) {
+    x.font = `700 ${size}px ${SANS}`;
+    tl = wrapText(x, text, half);
+    const widest = Math.max(...tl.map((l) => x.measureText(l).width));
+    if (widest <= half && tl.length <= 3) break;
+  }
+  const lh = Math.round(size * 1.12);
+  x.fillStyle = "#ffffff";
+  let y = M + Math.round(size * 0.86);
+  tl.forEach((l, i) => x.fillText(l, M, y + i * lh));
+  y += (tl.length - 1) * lh + 66;
   x.fillStyle = "#a1a1a6"; x.font = `400 44px ${SANS}`;
   const ml = wrapText(x, muscles, half);
   ml.forEach((l, i) => x.fillText(l, M, y + i * 56));
