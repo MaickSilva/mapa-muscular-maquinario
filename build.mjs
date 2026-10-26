@@ -8,12 +8,12 @@ import { createHash } from "node:crypto";
 const dev = process.argv.includes("--dev");
 
 const options = {
-  entryPoints: ["src/main.jsx"],
+  // v1 em dist/ e v2 em dist/v2/ (a v2 não é linkada nem indexada)
+  entryPoints: { "assets/app": "src/main.jsx", "v2/assets/app": "src/v2/main.jsx" },
   bundle: true,
   minify: !dev,
   sourcemap: dev,
-  outdir: "dist/assets",
-  entryNames: "app",
+  outdir: "dist",
   jsx: "automatic",
   // compatível com navegadores um pouco mais antigos (Safari 14+, Chrome 87+)
   target: ["es2019", "safari14", "chrome87", "firefox78", "edge88"],
@@ -36,17 +36,20 @@ await mkdir("dist", { recursive: true });
 
 // Escreve o index.html apontando para os arquivos gerados, com ?v= para não pegar cache antigo
 async function writeHtml() {
-  let v = "dev";
-  if (!dev) {
-    const js = await readFile("dist/assets/app.js");
-    const css = await readFile("dist/assets/app.css");
-    v = createHash("sha1").update(js).update(css).digest("hex").slice(0, 10);
+  for (const [src, dir, script] of [["index.html", "dist", "/src/main.jsx"], ["v2.html", "dist/v2", "/src/v2/main.jsx"]]) {
+    await mkdir(dir, { recursive: true });
+    let v = "dev";
+    if (!dev) {
+      const js = await readFile(`${dir}/assets/app.js`);
+      const css = await readFile(`${dir}/assets/app.css`);
+      v = createHash("sha1").update(js).update(css).digest("hex").slice(0, 10);
+    }
+    const html = (await readFile(src, "utf8")).replace(
+      `<script type="module" src="${script}"></script>`,
+      `<link rel="stylesheet" href="./assets/app.css?v=${v}" />\n    <script defer src="./assets/app.js?v=${v}"></script>`
+    );
+    await writeFile(`${dir}/index.html`, html);
   }
-  const html = (await readFile("index.html", "utf8")).replace(
-    '<script type="module" src="/src/main.jsx"></script>',
-    `<link rel="stylesheet" href="./assets/app.css?v=${v}" />\n    <script defer src="./assets/app.js?v=${v}"></script>`
-  );
-  await writeFile("dist/index.html", html);
   await writeFile("dist/.nojekyll", "");
 }
 
