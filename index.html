@@ -4,10 +4,37 @@
     <meta charset="UTF-8" />
     <meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover" />
     <meta name="description" content="Monte etiquetas com os grupos musculares de cada exercício para colar nas máquinas da academia." />
+    <meta name="color-scheme" content="dark" />
     <title>Mapa Muscular</title>
+    <style>
+      html, body { background: #0e0e10; color: #f4f4f5; margin: 0; font-family: -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, sans-serif; }
+      #boot { padding: 32px 20px; color: #8e8e93; font-size: 15px; }
+      #boot-error { display: none; margin: 20px; padding: 14px 16px; border: 1px solid #5c2b2b; background: #1f1212; color: #f3c4c4; border-radius: 12px; font-size: 14px; white-space: pre-wrap; word-break: break-word; }
+    </style>
+    <script>
+      // Se algo falhar ao carregar, mostra o erro na tela em vez de deixar a página em branco
+      window.__showBootError = function (msg) {
+        var el = document.getElementById("boot-error");
+        if (!el) return;
+        el.style.display = "block";
+        el.textContent = "Não foi possível abrir o Mapa Muscular neste navegador.\n\n" + msg +
+          "\n\nNavegador: " + navigator.userAgent;
+        var b = document.getElementById("boot"); if (b) b.style.display = "none";
+      };
+      window.addEventListener("error", function (e) {
+        if (!window.__appStarted) window.__showBootError((e.error && e.error.stack) || e.message || ("Falha ao carregar " + (e.target && (e.target.src || e.target.href))));
+      }, true);
+      window.addEventListener("unhandledrejection", function (e) {
+        if (!window.__appStarted) window.__showBootError(String(e.reason && (e.reason.stack || e.reason)));
+      });
+      setTimeout(function () {
+        if (!window.__appStarted) window.__showBootError("O app não iniciou depois de 10 segundos. Recarregue a página (Ctrl+Shift+R).");
+      }, 10000);
+    </script>
   </head>
   <body>
-    <div id="root"></div>
+    <div id="root"><p id="boot">Carregando…</p></div>
+    <pre id="boot-error"></pre>
     <script type="module" src="/src/main.jsx"></script>
   </body>
 </html>
