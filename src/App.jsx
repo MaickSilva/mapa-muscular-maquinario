@@ -52,28 +52,40 @@ function wrapText(x, text, maxW) {
   if (line) lines.push(line); return lines;
 }
 
-// Converte os SVGs da etiqueta em uma imagem PNG (para salvar ou compartilhar)
+// Gera a etiqueta como PNG no formato A6 (105 × 148 mm, ~300 dpi).
+// A margem de segurança evita que título e logo fiquem colados na borda ao imprimir.
+const SANS = "-apple-system, Segoe UI, Roboto, Helvetica, Arial, sans-serif";
 async function cardToPng(card, title, muscles, logo) {
-  const W = 1200, H = 1500, s = 2;
+  const W = 1240, H = 1748, M = 110;            // M = margem de segurança (~9 mm)
   const c = document.createElement("canvas"); c.width = W; c.height = H;
   const x = c.getContext("2d");
   x.fillStyle = "#000000"; x.fillRect(0, 0, W, H);
-  x.fillStyle = "#ffffff"; x.font = "700 84px -apple-system, Segoe UI, Roboto, sans-serif";
-  const half = (W - 140) / 2 - 20;
+  x.textBaseline = "alphabetic";
+
+  const half = (W - 2 * M) / 2 - 20;             // título e logo têm no máximo 50% cada
+  x.fillStyle = "#ffffff"; x.font = `700 84px ${SANS}`;
   const tl = wrapText(x, title || "Exercício", half);
-  tl.forEach((l, i) => x.fillText(l, 70, 150 + i * 92));
-  let y = 150 + (tl.length - 1) * 92 + 70;
-  x.fillStyle = "#a1a1a6"; x.font = "400 44px -apple-system, Segoe UI, Roboto, sans-serif";
+  let y = M + 72;
+  tl.forEach((l, i) => x.fillText(l, M, y + i * 94));
+  y += (tl.length - 1) * 94 + 66;
+  x.fillStyle = "#a1a1a6"; x.font = `400 44px ${SANS}`;
   const ml = wrapText(x, muscles, half);
-  ml.forEach((l, i) => x.fillText(l, 70, y + i * 54));
+  ml.forEach((l, i) => x.fillText(l, M, y + i * 56));
+  let headBottom = y + (ml.length - 1) * 56 + 20;
+
   if (logo) {
-    const li = new Image(); await new Promise((ok, no) => { li.onload = ok; li.onerror = no; li.src = logo; });
-    const lh = Math.min(170, li.height * (half / li.width)); const lw = li.width * (lh / li.height);
-    x.drawImage(li, W - 70 - lw, 80, lw, lh);
+    const li = new Image();
+    await new Promise((ok, no) => { li.onload = ok; li.onerror = no; li.src = logo; });
+    const k = Math.min(half / li.width, 190 / li.height);
+    const lw = li.width * k, lh = li.height * k;
+    x.drawImage(li, W - M - lw, M, lw, lh);
+    headBottom = Math.max(headBottom, M + lh);
   }
-  const top = Math.max(290, y + ml.length * 54 + 30);
+
+  const top = headBottom + 70;
+  const captionH = 90;
   const svgs = card.querySelectorAll(".pbodies svg");
-  const slotW = (W - 140) / 2;
+  const slotW = (W - 2 * M) / 2;
   for (let i = 0; i < svgs.length; i++) {
     const el = svgs[i].cloneNode(true);
     const r = svgs[i].getBoundingClientRect();
@@ -82,14 +94,18 @@ async function cardToPng(card, title, muscles, logo) {
     const url = "data:image/svg+xml;charset=utf-8," + encodeURIComponent(new XMLSerializer().serializeToString(el));
     const img = new Image();
     await new Promise((ok, no) => { img.onload = ok; img.onerror = no; img.src = url; });
-    const h = Math.min(1050 - Math.max(0, (typeof top === "number" ? top : 290) - 290), slotW * (r.height / r.width));
-    const w = h * (r.width / r.height);
-    x.drawImage(img, 70 + i * slotW + (slotW - w) / 2, top, w, Math.min(h, H - top - 110) === h ? h : h);
-    x.fillStyle = "#8e8e93"; x.font = "400 40px -apple-system, Segoe UI, Roboto, sans-serif";
-    x.textAlign = "center"; x.fillText(i ? "Costas" : "Frente", 70 + i * slotW + slotW / 2, top + h + 70); x.textAlign = "left";
+    const ratio = r.height / r.width;
+    const h = Math.min(H - M - captionH - top, (slotW - 20) * ratio);
+    const w = h / ratio;
+    x.drawImage(img, M + i * slotW + (slotW - w) / 2, top, w, h);
+    x.fillStyle = "#8e8e93"; x.font = `400 40px ${SANS}`; x.textAlign = "center";
+    x.fillText(i ? "Costas" : "Frente", M + i * slotW + slotW / 2, top + h + 64);
+    x.textAlign = "left";
   }
   return c.toDataURL("image/png");
 }
+
+const slugify = (t) => (t || "etiqueta").normalize("NFD").replace(/[\u0300-\u036f]/g, "").toLowerCase().replace(/[^a-z0-9]+/g, "-").replace(/^-|-$/g, "") || "etiqueta";
 
 function App() {
   const [title, setTitle] = useState("Tríceps testa");
@@ -136,7 +152,7 @@ function App() {
     const before = Date.now();
     try { window.print(); } catch (e) {}
     // Dentro do Claude o diálogo de impressão é bloqueado e print() volta na hora
-    if (Date.now() - before < 300) setPrintMsg("Se a janela de impressão não abriu, salve a imagem abaixo (pressione e segure no celular, ou clique com o botão direito) e imprima a partir dela.");
+    if (Date.now() - before < 300) setPrintMsg("A janela de impressão não abriu neste navegador. Use Baixar imagem e imprima o arquivo.");
   };
 
   return (
@@ -202,32 +218,28 @@ function App() {
         <div className="overlay" role="dialog" aria-label="Visualizar impressão">
           <div className="bar">
             <button className="ghost" onClick={() => setPreview(false)}>Voltar</button>
-            <button className="primary" onClick={doPrint}>Imprimir</button>
+            <div className="actions">
+              {png
+                ? <a className="ghost" href={png} download={slugify(title) + ".png"}>Baixar imagem</a>
+                : <span className="ghost disabled">Baixar imagem</span>}
+              <button className="primary" onClick={doPrint} disabled={!png}>Imprimir</button>
+            </div>
           </div>
           {printMsg && <p className="msg">{printMsg}</p>}
 
-          <div className="paper" ref={cardRef}>
-            <div className="phead">
-              <div className="ptitle">
-                <h1>{title || "Exercício"}</h1>
-                <p className="psub">{names || "Nenhum músculo marcado"}</p>
-              </div>
-              {logo && <img className="plogo" src={logo} alt="Logo da academia" />}
-            </div>
+          {/* Etiqueta em HTML: fica fora da tela e serve só de fonte dos desenhos para a imagem */}
+          <div className="paper" ref={cardRef} aria-hidden="true">
             <div className="pbodies">
               {["front", "back"].map((side) => (
-                <figure key={side}>
-                  <Body data={data} side={side} scale={1} border="none" defaultFill="#d4d6d9" />
-                  <figcaption>{side === "front" ? "Frente" : "Costas"}</figcaption>
-                </figure>
+                <figure key={side}><Body data={data} side={side} scale={1} border="none" /></figure>
               ))}
             </div>
           </div>
 
-          <div className="saveimg">
-            <p>Imagem para salvar</p>
-            {png ? <img src={png} alt={"Etiqueta " + title} /> : <span className="hint">Gerando imagem…</span>}
+          <div className="sheet">
+            {png ? <img src={png} alt={"Etiqueta " + (title || "Exercício")} /> : <span className="hint">Gerando etiqueta…</span>}
           </div>
+          <p className="size">Tamanho A6 · 105 × 148 mm</p>
         </div>
       )}
     </>
