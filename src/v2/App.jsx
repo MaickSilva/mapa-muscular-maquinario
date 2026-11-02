@@ -1,7 +1,7 @@
 import React, { useState, useRef, useEffect, useMemo } from "react";
 import BodyModule from "react-native-body-highlighter";
 import { SIZES, renderLabel, svgsToImages, processLogo } from "./label.js";
-import { MOVES, drawMovement } from "./poses.js";
+import { CATALOG, GROUPS, BY_ID, loadIllustration } from "./catalog.js";
 
 const Body = BodyModule.default || BodyModule;
 
@@ -27,7 +27,7 @@ const EXAMPLE = {
   warning: "Use com orientação de um profissional. Ajuste a máquina e confira as travas antes de colocar carga.",
   maxLoad: "",
   video: "",
-  move: "supino",
+  illus: "0066",
   size: "A6",
 };
 
@@ -49,17 +49,22 @@ function Field({ id, label, hint, children }) {
   );
 }
 
-function MovePreview({ id, color }) {
-  const ref = useRef(null);
+function IllusPreview({ id }) {
+  const [imgs, setImgs] = useState([]);
   useEffect(() => {
-    const c = ref.current; if (!c) return;
-    const dpr = window.devicePixelRatio || 1, w = c.clientWidth, h = c.clientHeight;
-    c.width = w * dpr; c.height = h * dpr;
-    const x = c.getContext("2d"); x.scale(dpr, dpr);
-    x.fillStyle = "#000"; x.fillRect(0, 0, w, h);
-    drawMovement(x, id, 14, 10, w - 28, h - 16, { body: color, machine: "#6b6f6d", caption: "#8e8e93" }, { caption: 14 });
-  }, [id, color]);
-  return <canvas ref={ref} className="movecanvas" aria-label="Prévia do desenho do movimento" />;
+    let alive = true; setImgs([]);
+    Promise.all(["start", "end"].map((ph) => loadIllustration(id, ph, 360, "#eceeed")))
+      .then((c) => alive && setImgs(c.map((x) => x.toDataURL())))
+      .catch(() => alive && setImgs([]));
+    return () => { alive = false; };
+  }, [id]);
+  return (
+    <div className="illus">
+      {["Início", "Fim"].map((t, i) => (
+        <figure key={t}>{imgs[i] ? <img src={imgs[i]} alt={`${BY_ID[id]?.nome}: ${t.toLowerCase()}`} /> : <span className="hint">Carregando…</span>}<figcaption>{t}</figcaption></figure>
+      ))}
+    </div>
+  );
 }
 
 export default function App() {
@@ -98,11 +103,19 @@ export default function App() {
     return { ...s, roles };
   });
   const press = (part) => part?.slug && LABEL[part.slug] && cycle(part.slug);
+  // escolher a ilustração preenche os músculos sugeridos, se nenhum estiver marcado
+  const pickIllus = (id) => setF((s) => {
+    const c = BY_ID[id];
+    if (!c || Object.keys(s.roles).length) return { ...s, illus: id };
+    const roles = {};
+    c.p.forEach((m) => (roles[m] = "p")); c.s.forEach((m) => (roles[m] = "s"));
+    return { ...s, illus: id, roles };
+  });
 
   const labelData = {
     code: f.code.trim(), title: f.title.trim(), primary, secondary, pColor: f.pColor, sColor: f.sColor,
     setup: lines(f.setup), steps: lines(f.steps), mistakes: lines(f.mistakes),
-    warning: f.warning.trim(), maxLoad: f.maxLoad.trim(), video: f.video.trim(), logo, size: f.size, move: f.move,
+    warning: f.warning.trim(), maxLoad: f.maxLoad.trim(), video: f.video.trim(), logo, size: f.size, illus: f.illus,
   };
   const key = JSON.stringify(labelData);
 
@@ -137,7 +150,7 @@ export default function App() {
     try { window.print(); } catch (e) {}
     if (Date.now() - before < 300) setPrintMsg("A janela de impressão não abriu neste navegador. Use Baixar imagem e imprima o arquivo.");
   };
-  const reset = () => setF({ ...EXAMPLE, roles: {}, code: "", title: "", setup: "", steps: "", mistakes: "", maxLoad: "", video: "", move: "" });
+  const reset = () => setF({ ...EXAMPLE, roles: {}, code: "", title: "", setup: "", steps: "", mistakes: "", maxLoad: "", video: "", illus: "" });
 
   const sizeStyle = { aspectRatio: `${SIZES[f.size].w} / ${SIZES[f.size].h}` };
 
@@ -196,14 +209,18 @@ export default function App() {
           </Field>
         </div>
 
-        <h2>Desenho do movimento</h2>
-        <Field id="move" label="Posição de início e fim" hint="Desenho gerado, sem fotos de pessoas">
-          <select id="move" className="input" value={f.move || ""} onChange={set("move")}>
-            <option value="">Sem desenho</option>
-            {Object.entries(MOVES).map(([k, m]) => <option key={k} value={k}>{m.label}</option>)}
+        <h2>Ilustração do movimento</h2>
+        <Field id="illus" label="Exercício" hint="Desenho de início e fim (Everkinetic, licença aberta)">
+          <select id="illus" className="input" value={f.illus || ""} onChange={(e) => pickIllus(e.target.value)}>
+            <option value="">Sem ilustração</option>
+            {GROUPS.map((g) => (
+              <optgroup key={g} label={g}>
+                {CATALOG.filter((c) => c.grupo === g).map((c) => <option key={c.id} value={c.id}>{c.nome}</option>)}
+              </optgroup>
+            ))}
           </select>
         </Field>
-        {f.move && <MovePreview id={f.move} color={f.pColor} />}
+        {f.illus && BY_ID[f.illus] && <IllusPreview id={f.illus} />}
 
         <h2>Segurança</h2>
         <div className="grid">

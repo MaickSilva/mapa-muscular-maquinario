@@ -2,7 +2,7 @@
 // Uso: node build.mjs        -> build de produção
 //      node build.mjs --dev  -> servidor local em http://localhost:5173
 import * as esbuild from "esbuild";
-import { mkdir, readFile, writeFile } from "node:fs/promises";
+import { mkdir, readFile, writeFile, cp } from "node:fs/promises";
 import { createHash } from "node:crypto";
 
 const dev = process.argv.includes("--dev");
@@ -33,6 +33,8 @@ const options = {
 };
 
 await mkdir("dist", { recursive: true });
+// arquivos estáticos (ilustrações e créditos) vão como estão
+await cp("public", "dist", { recursive: true });
 
 // Escreve o index.html apontando para os arquivos gerados, com ?v= para não pegar cache antigo
 async function writeHtml() {

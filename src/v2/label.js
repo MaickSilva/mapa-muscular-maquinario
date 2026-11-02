@@ -2,7 +2,7 @@
 // Tudo é medido antes de desenhar: o desenho do corpo ocupa o espaço que sobra
 // depois do cabeçalho, das instruções e do rodapé.
 import qrcode from "qrcode-generator";
-import { drawMovement, MOVES } from "./poses.js";
+import { drawIllustrations, illusRatio, fitIllus, CREDIT, BY_ID } from "./catalog.js";
 
 export const SIZES = {
   A6: { label: "A6 · 105 × 148 mm", w: 1240, h: 1748, mm: [105, 148] },
@@ -134,8 +134,11 @@ export async function renderLabel(d, bodies) {
     const warn = d.warning ? wrap(x, d.warning, fw) : [];
     const wl = 26 * t * k * 1.35;
     const loadH = d.maxLoad ? 54 * t + 18 * u : 0;
-    const textH = loadH + warn.length * wl;
-    return { warn, wl, fw, loadH, h: Math.max(textH, qr ? qr + 40 * u : 0) };
+    font(400, 20 * t);
+    const credit = d.illus && BY_ID[d.illus] ? wrap(x, CREDIT, fw) : [];
+    const cl = 20 * t * 1.35, creditH = credit.length ? credit.length * cl + 12 * u : 0;
+    const textH = loadH + warn.length * wl + creditH;
+    return { warn, wl, fw, loadH, credit, cl, h: Math.max(textH, qr ? qr + 40 * u : 0) };
   }
 
   const captionH = 64 * t;
@@ -171,17 +174,36 @@ export async function renderLabel(d, bodies) {
   }
   if (logo) x.drawImage(logo.img, W - M - logo.w, M, logo.w, logo.h);
 
-  // ---------- espaço do desenho do movimento (início e fim), abaixo do corpo
-  const move = d.move && MOVES[d.move];
-  const moveGap = 40 * u;
-  const moveH = move ? Math.min(leftW * (side ? 0.85 : 0.4), (areaH - captionH) * (side ? 0.5 : 0.45)) : 0;
+  // ---------- onde vai a ilustração de início e fim:
+  // A) na coluna do corpo, embaixo dele; B) numa faixa na largura toda, abaixo do corpo e das instruções.
+  // Fica a opção em que a ilustração sai maior.
+  const move = d.illus && BY_ID[d.illus];
+  const ratio = move ? await illusRatio(d.illus).catch(() => null) : null;
+  const slotW = leftW / 2;
+  const bodyPad = (side ? 12 : 30) * u;
+  const bodyNat = Math.min(...bodies.map((b) => (slotW - bodyPad) * b.ratio));
+  const footerTop = areaTop + areaH;
+  const capI = 26 * t, gapI = 24 * u, moveGap = 40 * u;
+  let plan = null;
+  if (ratio) {
+    const hB = Math.min(bodyNat, (areaH - captionH) * (side ? 1 : 0.42));
+    const topB = Math.max(areaTop + hB + captionH, side ? areaTop + sec.h : 0) + moveGap;
+    const B = { hBody: hB, x: M, y: topB, w: inner, h: footerTop - topB };
+    B.fit = fitIllus(ratio, B.w, B.h, capI, gapI);
+    plan = B;
+    if (side) {
+      const hA = Math.min(bodyNat, (areaH - captionH) * 0.5);
+      const topA = areaTop + hA + captionH + moveGap * 0.6;
+      const A = { hBody: hA, x: M, y: topA, w: leftW, h: footerTop - topA };
+      A.fit = fitIllus(ratio, A.w, A.h, capI, gapI);
+      if (A.fit.ih > B.fit.ih) plan = A;
+    }
+  }
 
   // ---------- desenha o corpo
-  const slotW = leftW / 2;
-  let bodyBottom = areaTop;
+  const bodyLimit = plan ? plan.hBody : areaH - captionH;
   bodies.forEach((b, i) => {
-    const h = Math.max(120 * u, Math.min(areaH - captionH - (move ? moveH + moveGap : 0), (slotW - (side ? 12 : 30) * u) * b.ratio));
-    bodyBottom = Math.max(bodyBottom, areaTop + h + captionH);
+    const h = Math.max(120 * u, Math.min(bodyLimit, (slotW - bodyPad) * b.ratio));
     const w = h / b.ratio;
     x.drawImage(b.img, M + i * slotW + (slotW - w) / 2, areaTop, w, h);
     font(400, 28 * t); x.fillStyle = C.faint; x.textAlign = "center";
@@ -189,9 +211,11 @@ export async function renderLabel(d, bodies) {
     x.textAlign = "left";
   });
 
-  if (move) {
-    drawMovement(x, d.move, M, bodyBottom + moveGap * 0.6, leftW, moveH, { body: d.pColor, machine: "#6b6f6d", caption: C.faint },
-      { caption: 28 * t, font: SANS });
+  if (plan) {
+    try {
+      await drawIllustrations(x, d.illus, plan.x, plan.y, plan.w, plan.h, { ink: "#eceeed", caption: C.faint },
+        { caption: capI, font: SANS, gap: gapI, ratio });
+    } catch (e) { /* sem ilustração se o arquivo não carregar */ }
   }
 
   // ---------- desenha as instruções
@@ -227,6 +251,11 @@ export async function renderLabel(d, bodies) {
   }
   font(400, 26 * t * k); x.fillStyle = C.muted;
   foot.warn.forEach((l, i) => x.fillText(l, M, ty + 26 * t * k + i * foot.wl));
+  ty += foot.warn.length * foot.wl;
+  if (foot.credit.length) {
+    font(400, 20 * t); x.fillStyle = C.faint;
+    foot.credit.forEach((l, i) => x.fillText(l, M, ty + 12 * u + 20 * t + i * foot.cl));
+  }
   if (qr) {
     drawQr(x, d.video, W - M - qr, fy, qr);
     font(400, 22 * t); x.fillStyle = C.faint; x.textAlign = "center";
