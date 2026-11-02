@@ -1,6 +1,7 @@
 import React, { useState, useRef, useEffect, useMemo } from "react";
 import BodyModule from "react-native-body-highlighter";
 import { SIZES, renderLabel, svgsToImages, processLogo } from "./label.js";
+import { MOVES, drawMovement } from "./poses.js";
 
 const Body = BodyModule.default || BodyModule;
 
@@ -26,6 +27,7 @@ const EXAMPLE = {
   warning: "Use com orientação de um profissional. Ajuste a máquina e confira as travas antes de colocar carga.",
   maxLoad: "",
   video: "",
+  move: "supino",
   size: "A6",
 };
 
@@ -45,6 +47,19 @@ function Field({ id, label, hint, children }) {
       {hint && <span className="fhint">{hint}</span>}
     </label>
   );
+}
+
+function MovePreview({ id, color }) {
+  const ref = useRef(null);
+  useEffect(() => {
+    const c = ref.current; if (!c) return;
+    const dpr = window.devicePixelRatio || 1, w = c.clientWidth, h = c.clientHeight;
+    c.width = w * dpr; c.height = h * dpr;
+    const x = c.getContext("2d"); x.scale(dpr, dpr);
+    x.fillStyle = "#000"; x.fillRect(0, 0, w, h);
+    drawMovement(x, id, 14, 10, w - 28, h - 16, { body: color, machine: "#6b6f6d", caption: "#8e8e93" }, { caption: 14 });
+  }, [id, color]);
+  return <canvas ref={ref} className="movecanvas" aria-label="Prévia do desenho do movimento" />;
 }
 
 export default function App() {
@@ -87,7 +102,7 @@ export default function App() {
   const labelData = {
     code: f.code.trim(), title: f.title.trim(), primary, secondary, pColor: f.pColor, sColor: f.sColor,
     setup: lines(f.setup), steps: lines(f.steps), mistakes: lines(f.mistakes),
-    warning: f.warning.trim(), maxLoad: f.maxLoad.trim(), video: f.video.trim(), logo, size: f.size,
+    warning: f.warning.trim(), maxLoad: f.maxLoad.trim(), video: f.video.trim(), logo, size: f.size, move: f.move,
   };
   const key = JSON.stringify(labelData);
 
@@ -122,7 +137,7 @@ export default function App() {
     try { window.print(); } catch (e) {}
     if (Date.now() - before < 300) setPrintMsg("A janela de impressão não abriu neste navegador. Use Baixar imagem e imprima o arquivo.");
   };
-  const reset = () => setF({ ...EXAMPLE, roles: {}, code: "", title: "", setup: "", steps: "", mistakes: "", maxLoad: "", video: "" });
+  const reset = () => setF({ ...EXAMPLE, roles: {}, code: "", title: "", setup: "", steps: "", mistakes: "", maxLoad: "", video: "", move: "" });
 
   const sizeStyle = { aspectRatio: `${SIZES[f.size].w} / ${SIZES[f.size].h}` };
 
@@ -180,6 +195,15 @@ export default function App() {
             <textarea id="mistakes" rows="2" value={f.mistakes} onChange={set("mistakes")} placeholder="Travar os cotovelos" />
           </Field>
         </div>
+
+        <h2>Desenho do movimento</h2>
+        <Field id="move" label="Posição de início e fim" hint="Desenho gerado, sem fotos de pessoas">
+          <select id="move" className="input" value={f.move || ""} onChange={set("move")}>
+            <option value="">Sem desenho</option>
+            {Object.entries(MOVES).map(([k, m]) => <option key={k} value={k}>{m.label}</option>)}
+          </select>
+        </Field>
+        {f.move && <MovePreview id={f.move} color={f.pColor} />}
 
         <h2>Segurança</h2>
         <div className="grid">

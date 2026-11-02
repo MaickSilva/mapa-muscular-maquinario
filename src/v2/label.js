@@ -2,6 +2,7 @@
 // Tudo é medido antes de desenhar: o desenho do corpo ocupa o espaço que sobra
 // depois do cabeçalho, das instruções e do rodapé.
 import qrcode from "qrcode-generator";
+import { drawMovement, MOVES } from "./poses.js";
 
 export const SIZES = {
   A6: { label: "A6 · 105 × 148 mm", w: 1240, h: 1748, mm: [105, 148] },
@@ -170,16 +171,28 @@ export async function renderLabel(d, bodies) {
   }
   if (logo) x.drawImage(logo.img, W - M - logo.w, M, logo.w, logo.h);
 
+  // ---------- espaço do desenho do movimento (início e fim), abaixo do corpo
+  const move = d.move && MOVES[d.move];
+  const moveGap = 40 * u;
+  const moveH = move ? Math.min(leftW * (side ? 0.85 : 0.4), (areaH - captionH) * (side ? 0.5 : 0.45)) : 0;
+
   // ---------- desenha o corpo
   const slotW = leftW / 2;
+  let bodyBottom = areaTop;
   bodies.forEach((b, i) => {
-    const h = Math.max(120 * u, Math.min(areaH - captionH, (slotW - (side ? 12 : 30) * u) * b.ratio));
+    const h = Math.max(120 * u, Math.min(areaH - captionH - (move ? moveH + moveGap : 0), (slotW - (side ? 12 : 30) * u) * b.ratio));
+    bodyBottom = Math.max(bodyBottom, areaTop + h + captionH);
     const w = h / b.ratio;
     x.drawImage(b.img, M + i * slotW + (slotW - w) / 2, areaTop, w, h);
     font(400, 28 * t); x.fillStyle = C.faint; x.textAlign = "center";
     x.fillText(i ? "Costas" : "Frente", M + i * slotW + slotW / 2, areaTop + h + 44 * t);
     x.textAlign = "left";
   });
+
+  if (move) {
+    drawMovement(x, d.move, M, bodyBottom + moveGap * 0.6, leftW, moveH, { body: d.pColor, machine: "#6b6f6d", caption: C.faint },
+      { caption: 28 * t, font: SANS });
+  }
 
   // ---------- desenha as instruções
   const tx = side ? M + leftW + gapC : M;
